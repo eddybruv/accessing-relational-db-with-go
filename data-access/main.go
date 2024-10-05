@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
@@ -44,11 +45,27 @@ func main() {
 	}
 
 	fmt.Println("DB Connected 🙌")
-	drakeAlbums, err := albumsByArtist("Drake")
+	drakeAlbums, err := albumsByArtist("Kanye")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(drakeAlbums)
+	fmt.Println("Albums found:", drakeAlbums)
+
+	alb, err := albumByID(49)
+	if err != nil {
+		log.Fatal("err")
+	}
+	fmt.Println("Albums found:", alb)
+
+	albID, err := addAlbum(Album{
+		Title:  "Split Decision",
+		Artist: "Dave",
+		Price:  72.99,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("ID of added album: %v\n", albID)
 }
 
 // albumsByArtist queries for albums that have the specified artist name
@@ -79,4 +96,32 @@ func albumsByArtist(name string) ([]Album, error) {
 	}
 
 	return albums, nil
+}
+
+// albumByID queries for the album with the specified ID
+func albumByID(id int64) (Album, error) {
+	var tempAlbum Album
+
+	row := db.QueryRow("select * from album where id=?", id)
+	if err := row.Scan(&tempAlbum.ID, &tempAlbum.Title, &tempAlbum.Artist, &tempAlbum.Price); err != nil {
+		// use errors.Is instead of err == sql.ErrNoRows
+		if errors.Is(err, sql.ErrNoRows) {
+			return tempAlbum, fmt.Errorf("albumsById %d: no such album", id)
+		}
+		return tempAlbum, fmt.Errorf("albumsById %d: %v", id, err)
+	}
+	return tempAlbum, nil
+}
+
+// addAlbum
+func addAlbum(alb Album) (int64, error) {
+	result, err := db.Exec("INSERT into album (title, artist, price) values (?, ?, ?)", alb.Title, alb.Artist, alb.Price)
+	if err != nil {
+		return 0, fmt.Errorf("addAlbum: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("addAlbum: %v", err)
+	}
+	return id, nil
 }
